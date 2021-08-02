@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./style.css">
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <title>Heat Map</title>
+</head>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+*{
+    font-family: 'Source Sans Pro', sans-serif;
+}
+
+html{
+    min-height: 100%
+}
+
+body {
+    background-color: #E0E3F0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+    color: #163D57
+}
+
+svg{
+    background-color: #163D57;
+    /*box-shadow: 0px 3px 15px rgba(0,0,0,0.2); */
+    /*border-radius: 5px; */
+    padding: 10px;
+}
+
+#canvas{
+    min-height: 600px;
+    min-width: 1200px;
+}
+
+
+.cell:hover{
+    fill: black
+}
+
+g{
+    color: #E0E3F0
+}
+
+#tooltip{
+    visibility: hidden;
+    height: auto;
+    width: auto;
+    margin-top: 2px;
+    color: #163D57;
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+#legend{
+    color: rgb(56, 58, 74);
+    font-size: 18px;
+    text-align: center;
+    min-height: 150px;
+}
+
+
+#title{
+    font-size: 28px;
+    color: #163D57;
+    text-transform: uppercase;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+</style>
+
+<body>
+    <h1 id='title'>Monthly Global Land-Surface Temperature</h1>
+    <h4 id='description'>Temperatures from 1753 - 2015 . Average is 8.66℃</h4>
+    <div id='tooltip'>
+
+    </div>
+    <svg id='canvas'>
+        
+    </svg>
+    <svg id='legend'>
+        <g>
+            <rect x="10" y="0" width="40" height="40" fill="SteelBlue"></rect>
+            <text x="60" y="20" fill="white">Variance of -1 or less</text>
+        </g>
+        <g>
+            <rect x="10" y="40" width="40" height="40" fill="LightSteelBlue"></rect>
+            <text x="60" y="60" fill="white">On or Below Average</text>
+        </g>
+        <g>
+            <rect x="10" y="80" width="40" height="40" fill="Orange"></rect>
+            <text x="60" y="100" fill="white">Above Average</text>
+        </g>
+        <g>
+            <rect x="10" y="120" width="40" height="40" fill="Crimson"></rect>
+            <text x="60" y="140" fill="white">Variance of +1 or more</text>
+        </g>
+    </svg>
+</body>
+<script>
+let url = 'https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/global-temperature.json'
+let req = new XMLHttpRequest()
+
+let baseTemp
+let values =[]
+
+let xScale
+let yScale
+
+let xAxis
+let yAxis
+
+let width = 1200
+let height = 600
+let padding = 60
+
+let svg = d3.select('svg')
+let tooltip = d3.select('#tooltip')
+
+let generateScales = () => {
+
+    let minYear = d3.min(values, (item) => {
+        return item['year']
+    })
+    
+    let maxYear = d3.max(values, (item) => {
+        return item['year']
+    })
+
+    xScale = d3.scaleLinear()
+                .domain([minYear, maxYear + 1])
+                .range([padding, width - padding])
+
+    yScale = d3.scaleTime()
+                .domain([new Date(0,0,0,0, 0, 0, 0), new Date(0,12,0,0,0,0,0)])
+                .range([padding, height - padding])
+}
+
+let drawCanvas = () => {
+    svg.attr('width', width)
+    svg.attr('height', height)
+}
+
+let drawCells = () => {
+
+    svg.selectAll('rect')
+        .data(values)
+        .enter()
+        .append('rect')
+        .attr('class','cell')
+        .attr('fill', (item) => {
+            let variance = item['variance']
+            if(variance <= -1){
+                return 'SteelBlue'
+            }else if(variance <= 0){
+                return 'LightSteelBlue'
+            }else if(variance <= 1){
+                return 'Orange'
+            }else{
+                return 'Crimson'
+            }
+        })
+        .attr('data-year', (item) => {
+            return item['year']
+        })
+        .attr('data-month', (item) => {
+            return item['month'] - 1
+        })
+        .attr('data-temp', (item) => {
+            return baseTemp + item['variance']
+        })
+        .attr('height', (item)=> {
+            return (height - (2 * padding)) / 12
+        })
+        .attr('y', (item) => {
+            return yScale(new Date(0, item['month']-1, 0, 0, 0, 0, 0))
+        })
+        .attr('width', (item) => {
+            let minYear = d3.min(values, (item) => {
+                return item['year']
+            })
+            
+            let maxYear = d3.max(values, (item) => {
+                return item['year']
+            })
+
+            let yearCount = maxYear - minYear
+
+            return (width - (2 * padding)) / yearCount
+        })
+        .attr('x', (item) => {
+            return xScale(item['year'])
+        })
+        .on('mouseover', (item) => {
+            tooltip.transition()
+                .style('visibility', 'visible')
+            
+            let monthNames = ["January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+            ]
+        
+            tooltip.text(item['year'] + ' ' + monthNames[item['month'] -1 ] + ' : ' + item['variance'])
+
+            tooltip.attr('data-year', item['year'])
+        })
+        .on('mouseout', (item) => {
+            tooltip.transition()
+                .style('visibility', 'hidden')
+        })
+        
+}
+
+let generateAxes = () => {
+
+    let xAxis = d3.axisBottom(xScale)
+                    .tickFormat(d3.format('d'))
+
+    let yAxis = d3.axisLeft(yScale)
+                    .tickFormat(d3.timeFormat('%B'))
+
+    svg.append('g')
+        .call(xAxis)
+        .attr('id','x-axis')
+        .attr('transform', 'translate(0, ' + (height-padding) + ')')
+
+    svg.append('g')
+        .call(yAxis)
+        .attr('id', 'y-axis')
+        .attr('transform', 'translate(' + padding + ', 0)')
+    
+}
+
+
+req.open('GET', url, true)
+req.onload = () => {
+    let data = JSON.parse(req.responseText)
+    baseTemp = data.baseTemperature
+    values = data.monthlyVariance
+    console.log(baseTemp)
+    console.log(values)
+    drawCanvas()
+    generateScales()
+    drawCells()
+    generateAxes()
+}
+req.send()
+
+</script>
+</html>
